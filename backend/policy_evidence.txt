@@ -1,0 +1,22 @@
+﻿INFORMATION SECURITY POLICY
+
+Document version: 2.1
+Approved by: Chief Information Security Officer
+Approval date: 2025-01-15
+Review cycle: Annual
+
+1. PURPOSE
+This policy defines the information security objectives of the organization
+and affirms the strategic importance of protecting information assets in line
+with our corporate goals.
+
+2. SCOPE
+This policy applies to all employees, contractors, and external partners.
+
+3. REVIEW AND COMMUNICATION
+This policy is reviewed annually and communicated to all employees via the
+company intranet. Non-compliance may result in disciplinary action.
+
+4. LEGAL AND CONTRACTUAL REQUIREMENTS
+The policy integrates applicable legal, regulatory, and contractual
+requirements relevant to information security.
