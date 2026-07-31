@@ -22,3 +22,4 @@ class User:
     company_name: str | None = None
     sector: str | None = None
     profile_photo: str | None = None
+    email_verified: bool = False

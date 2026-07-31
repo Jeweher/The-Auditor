@@ -25,6 +25,18 @@ export async function login(email: string, password: string): Promise<AuthTokens
 export async function logout(refreshToken: string): Promise<void> {
   await api.post("/api/v1/auth/logout", { refresh_token: refreshToken });
 }
+export async function verifyEmail(userId: string, code: string): Promise<User> {
+  const { data } = await api.post<User>("/api/v1/auth/verify-email", {
+    user_id: userId,
+    code,
+  });
+  return data;
+}
+
+export async function resendVerification(email: string): Promise<User> {
+  const { data } = await api.post<User>("/api/v1/auth/resend-verification", { email });
+  return data;
+}
 export async function getMe(): Promise<User> {
   const { data } = await api.get<User>("/api/v1/auth/me");
   return data;

@@ -8,6 +8,7 @@ export interface User {
   sector?: string | null;
   profile_photo?: string | null;
   is_active: boolean;
+  email_verified: boolean;
   created_at: string;
 }
 

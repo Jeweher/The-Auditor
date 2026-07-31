@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     STORAGE_PROVIDER: str = "local"
     TESSERACT_CMD: str = ""
 
+    # --- Email (Resend) ---
+    RESEND_API_KEY: str = Field(default="")
+    RESEND_FROM_EMAIL: str = Field(default="onboarding@resend.dev")
+    EMAIL_VERIFICATION_EXPIRE_MINUTES: int = Field(default=15)
+    EMAIL_VERIFICATION_MAX_ATTEMPTS: int = Field(default=5)
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -36,6 +36,9 @@ class UserRepositoryPort(ABC):
     @abstractmethod
     def set_profile_photo(self, user_id: UUID, data_url: str | None) -> User:
         raise NotImplementedError
+    @abstractmethod
+    def set_email_verified(self, user_id: UUID, verified: bool) -> User:
+        raise NotImplementedError
 
     @abstractmethod
     def store_refresh_token(self, user_id: UUID, hashed_token: str, expires_at) -> None:

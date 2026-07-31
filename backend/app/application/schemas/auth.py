@@ -29,6 +29,15 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class VerifyEmailRequest(BaseModel):
+    user_id: UUID
+    code: str = Field(min_length=6, max_length=6)
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr    
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
@@ -43,6 +52,7 @@ class UserResponse(BaseModel):
     sector: str | None = None
     profile_photo: str | None = None
     is_active: bool
+    email_verified: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}

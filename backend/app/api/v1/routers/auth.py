@@ -9,17 +9,23 @@ Purpose: HTTP layer for authentication. Routes contain no business logic —
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
 
-from app.api.v1.deps import get_auth_service, get_current_user
+
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+
+from app.api.v1.deps import get_auth_service, get_current_user, get_email_verification_service
 from app.application.schemas.auth import (
     LoginRequest,
     RefreshRequest,
     RegisterRequest,
+    ResendVerificationRequest,
     TokenResponse,
     UserResponse,
+    VerifyEmailRequest,
 )
 from app.application.services.auth_service import AuthService
+from app.application.services.email_verification_service import EmailVerificationService
+from app.core.rate_limit import resend_verification_rate_limiter
 from app.domain.entities.user import User
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -29,14 +35,17 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 def register(
     payload: RegisterRequest,
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    verification_service: Annotated[EmailVerificationService, Depends(get_email_verification_service)],
 ) -> User:
-    return auth_service.register(
+    user = auth_service.register(
         email=payload.email,
         password=payload.password,
         full_name=payload.full_name,
         company_name=payload.company_name,
         sector=payload.sector,
     )
+    verification_service.send_verification_code(user)
+    return user
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -71,9 +80,7 @@ def logout(
 def get_me(current_user: Annotated[User, Depends(get_current_user)]) -> User:
     return current_user
 
-@router.get("/me", response_model=UserResponse)
-def get_me(current_user: Annotated[User, Depends(get_current_user)]) -> User:
-    return current_user
+
 @router.post("/me/photo", response_model=UserResponse)
 async def upload_profile_photo(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -92,3 +99,22 @@ def delete_profile_photo(
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> User:
     return auth_service.remove_profile_photo(current_user.id)
+
+@router.post("/verify-email", response_model=UserResponse)
+def verify_email(
+    payload: VerifyEmailRequest,
+    verification_service: Annotated[EmailVerificationService, Depends(get_email_verification_service)],
+) -> User:
+    return verification_service.verify_code(payload.user_id, payload.code)
+
+
+@router.post("/resend-verification", response_model=UserResponse)
+def resend_verification(
+    payload: ResendVerificationRequest,
+    request: Request,
+    verification_service: Annotated[EmailVerificationService, Depends(get_email_verification_service)],
+) -> User:
+    client_ip = request.client.host if request.client else "unknown"
+    if not resend_verification_rate_limiter.allow(client_ip):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests. Try again later.")
+    return verification_service.resend_code(payload.email)

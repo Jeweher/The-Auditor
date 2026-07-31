@@ -31,3 +31,6 @@ class InMemoryRateLimiter:
 
 # 15 questions per hour per IP for the public TISAX Teacher widget.
 public_assistant_rate_limiter = InMemoryRateLimiter(max_requests=15, window_seconds=3600)
+
+# 5 resend requests per hour per IP for email verification.
+resend_verification_rate_limiter = InMemoryRateLimiter(max_requests=5, window_seconds=3600)

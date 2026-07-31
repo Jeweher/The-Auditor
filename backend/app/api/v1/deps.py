@@ -33,8 +33,14 @@ from app.domain.ports.embedding_provider import EmbeddingProviderPort
 from app.domain.ports.llm_client import LLMPort
 from app.domain.ports.file_storage import FileStoragePort
 from app.domain.ports.vector_store import VectorStorePort
+from app.application.services.email_verification_service import EmailVerificationService
+from app.domain.ports.email_sender import EmailSenderPort
+from app.infrastructure.db.repositories.email_verification_repository import (
+    SqlAlchemyEmailVerificationRepository,
+)
 from app.infrastructure.db.repositories.user_repository import SqlAlchemyUserRepository
 from app.infrastructure.db.session import get_db
+from app.infrastructure.email.factory import build_email_sender
 from app.infrastructure.embeddings.labse_embedding_provider import LaBSEEmbeddingProvider
 from app.infrastructure.llm.factory import build_llm_client
 from app.infrastructure.storage.factory import build_file_storage
@@ -53,6 +59,22 @@ def get_current_user(
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> User:
     return auth_service.get_current_user(credentials.credentials)
+@lru_cache
+def _email_sender_singleton() -> EmailSenderPort:
+    return build_email_sender()
+
+
+def get_email_sender() -> EmailSenderPort:
+    return _email_sender_singleton()
+
+
+def get_email_verification_service(
+    db: Annotated[Session, Depends(get_db)],
+    email_sender: Annotated[EmailSenderPort, Depends(get_email_sender)],
+) -> EmailVerificationService:
+    user_repository = SqlAlchemyUserRepository(db)
+    verification_repository = SqlAlchemyEmailVerificationRepository(db)
+    return EmailVerificationService(user_repository, verification_repository, email_sender)
 
 
 # --- Knowledge base: process-wide singletons ---------------------------

@@ -28,11 +28,15 @@ class UserModel(Base):
     sector: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     profile_photo: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     refresh_tokens: Mapped[list["RefreshTokenModel"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    email_verifications: Mapped[list["EmailVerificationModel"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -214,3 +218,25 @@ class EvidenceAnalysisModel(Base):
     )
 
     evidence: Mapped["EvidenceModel"] = relationship(back_populates="analysis")
+
+    # ─────────────────────────────────────────────────────────────────────
+# Email verification (registration confirmation, 6-digit code)
+# ─────────────────────────────────────────────────────────────────────
+
+class EmailVerificationModel(Base):
+    __tablename__ = "email_verifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
+    hashed_code: Mapped[str] = mapped_column(String(255), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    user: Mapped["UserModel"] = relationship(back_populates="email_verifications")

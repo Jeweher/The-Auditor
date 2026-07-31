@@ -28,6 +28,7 @@ def _to_domain(model: UserModel) -> User:
         company_name=model.company_name,
         sector=model.sector,
         profile_photo=model.profile_photo,
+        email_verified=model.email_verified,
     )
 
 
@@ -66,6 +67,12 @@ class SqlAlchemyUserRepository(UserRepositoryPort):
     def set_profile_photo(self, user_id: UUID, data_url: str | None) -> User:
         model = self._db.get(UserModel, user_id)
         model.profile_photo = data_url
+        self._db.commit()
+        self._db.refresh(model)
+        return _to_domain(model)
+    def set_email_verified(self, user_id: UUID, verified: bool) -> User:
+        model = self._db.get(UserModel, user_id)
+        model.email_verified = verified
         self._db.commit()
         self._db.refresh(model)
         return _to_domain(model)

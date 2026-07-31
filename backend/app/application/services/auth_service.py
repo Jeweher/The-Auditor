@@ -57,6 +57,8 @@ class AuthService:
             raise UnauthorizedError("Invalid email or password.")
         if not user.is_active:
             raise UnauthorizedError("This account has been deactivated.")
+        if not user.email_verified:
+            raise UnauthorizedError("Please verify your email address before logging in.")
         return user
 
     def issue_tokens(self, user: User) -> tuple[str, str]:
