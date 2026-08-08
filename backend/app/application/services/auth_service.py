@@ -59,6 +59,15 @@ class AuthService:
             raise UnauthorizedError("This account has been deactivated.")
         if not user.email_verified:
             raise UnauthorizedError("Please verify your email address before logging in.")
+
+        # One-time bootstrap: the configured admin email is promoted on its
+        # first successful login. Purely additive — never demotes anyone,
+        # and does nothing once that account is already an admin.
+        settings = get_settings()
+        bootstrap_email = settings.ADMIN_BOOTSTRAP_EMAIL.strip().lower()
+        if bootstrap_email and user.email.strip().lower() == bootstrap_email and user.role != "admin":
+            user = self._repo.set_role(user.id, "admin")
+
         return user
 
     def issue_tokens(self, user: User) -> tuple[str, str]:

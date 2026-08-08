@@ -15,7 +15,7 @@ from typing import Annotated
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
-
+from app.domain.ports.user_repository import UserRepositoryPort
 from app.application.services.auth_service import AuthService
 from app.application.services.assessment_service import AssessmentService
 from app.application.services.knowledge_base_ingestion_service import KnowledgeBaseIngestionService
@@ -49,8 +49,11 @@ from app.infrastructure.vector_store.chroma_store import ChromaVectorStore
 bearer_scheme = HTTPBearer()
 
 
-def get_auth_service(db: Annotated[Session, Depends(get_db)]) -> AuthService:
-    repository = SqlAlchemyUserRepository(db)
+def get_user_repository(db: Annotated[Session, Depends(get_db)]) -> UserRepositoryPort:
+    return SqlAlchemyUserRepository(db)
+
+
+def get_auth_service(repository: Annotated[UserRepositoryPort, Depends(get_user_repository)]) -> AuthService:
     return AuthService(repository)
 
 

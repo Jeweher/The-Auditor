@@ -123,3 +123,25 @@ export async function listControls(assessmentId: string): Promise<ControlWithQue
   const { data } = await api.get<ControlWithQuestions[]>(`/api/v1/assessments/${assessmentId}/controls`);
   return data;
 }
+
+export async function editAnswer(answerId: string, payload: AnswerPayload): Promise<AnswerResult> {
+  const { data } = await api.patch<AnswerResult>(`/api/v1/assessments/answers/${answerId}`, payload);
+  return data;
+}
+
+export interface UploadQuestionnaireResult {
+  collection: string;
+  chunks_ingested: number;
+  filename: string;
+}
+
+export async function uploadQuestionnaire(file: File): Promise<UploadQuestionnaireResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post<UploadQuestionnaireResult>(
+    "/api/v1/knowledge-base/upload",
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+  return data;
+}

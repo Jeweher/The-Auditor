@@ -55,6 +55,7 @@ class Settings(BaseSettings):
 
     STORAGE_PROVIDER: str = "local"
     TESSERACT_CMD: str = ""
+    ADMIN_BOOTSTRAP_EMAIL: str = ""
 
     # --- Email (Resend) ---
     RESEND_API_KEY: str = Field(default="")

@@ -53,6 +53,7 @@ class UserResponse(BaseModel):
     profile_photo: str | None = None
     is_active: bool
     email_verified: bool
+    role: str
     created_at: datetime
 
     model_config = {"from_attributes": True}

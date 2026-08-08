@@ -23,3 +23,4 @@ class User:
     sector: str | None = None
     profile_photo: str | None = None
     email_verified: bool = False
+    role: str = "user"

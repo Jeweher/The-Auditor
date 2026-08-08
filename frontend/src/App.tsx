@@ -10,6 +10,8 @@ import Chatbot from "./pages/Chatbot";
 import Dashboard from "./pages/Dashboard";
 import Report from "./pages/Report";
 import Profile from "./pages/Profile";
+import AdminRoute from "./components/AdminRoute";
+import AdminUsers from "./pages/admin/AdminUsers";
 
 function App() {
   return (
@@ -69,6 +71,16 @@ function App() {
               <ProtectedRoute>
                 <Profile />
               </ProtectedRoute>
+            }
+          />
+
+          {/* Admin */}
+          <Route
+            path="/admin/users"
+            element={
+              <AdminRoute>
+                <AdminUsers />
+              </AdminRoute>
             }
           />
 

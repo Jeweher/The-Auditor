@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 
 export default function Navbar() {
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, role, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
@@ -52,6 +52,14 @@ export default function Navbar() {
               >
                 Profile
               </Link>
+              {role === "admin" && (
+                <Link
+                  to="/admin/users"
+                  className="hidden rounded-lg px-3 py-2 text-sm font-medium text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-slate-800 sm:block"
+                >
+                  Manage users
+                </Link>
+              )}
             </>
           ) : (
             <Link

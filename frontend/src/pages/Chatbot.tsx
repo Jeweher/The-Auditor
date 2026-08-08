@@ -8,8 +8,18 @@ import type { AnswerResult } from "../api/assessments";
 // ===== Chat transcript model =====
 
 type Entry =
-  | { id: string; role: "bot" | "user"; type: "text"; text: string; caption?: string }
+  | { id: string; role: "bot" | "user"; type: "text"; text: string; caption?: string; questionId?: string; answerId?: string }
   | { id: string; role: "bot"; type: "typing" }
+  | {
+      id: string;
+      role: "bot";
+      type: "evidence-request";
+      answerId: string;
+      docs: string[];
+      status: "idle" | "uploading" | "analyzing";
+      controlId: string;
+      controlNumber: string;
+    }
   | {
       id: string;
       role: "bot";
@@ -20,6 +30,13 @@ type Entry =
       finding: string;
       recommendation: string;
     };
+
+interface AnswerOwner {
+  controlId: string;
+  controlNumber: string;
+  evidenceExpected: boolean;
+  expectedDocuments: string[];
+}
 
 function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -41,7 +58,7 @@ const QUICK_REPLIES: { value: "yes" | "no" | "partial"; label: string; className
 
 export default function Chatbot() {
   const { id } = useParams<{ id: string }>();
-  const { email, profilePhoto } = useAuth();
+  const { email, profilePhoto, fullName, companyName } = useAuth();
 
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [control, setControl] = useState<ControlWithQuestions | null>(null);
@@ -52,6 +69,7 @@ export default function Chatbot() {
   const [evidenceUi, setEvidenceUi] = useState<"idle" | "uploading" | "analyzing">("idle");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [finished, setFinished] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +80,8 @@ export default function Chatbot() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const controlRef = useRef<ControlWithQuestions | null>(null);
   controlRef.current = control;
+  const controlLockedRef = useRef(false);
+  const answerControlMapRef = useRef<Record<string, AnswerOwner>>({});
 
   const userInitial = (email || "U").charAt(0).toUpperCase();
 
@@ -83,8 +103,14 @@ export default function Chatbot() {
     setStreaming(null);
   }
 
-  function sayUser(text: string, caption?: string) {
-    setEntries((prev) => [...prev, { id: uid(), role: "user", type: "text", text, caption }]);
+ function sayUser(
+    text: string,
+    caption?: string,
+    extra?: { questionId?: string; answerId?: string }
+  ): string {
+    const id = uid();
+    setEntries((prev) => [...prev, { id, role: "user", type: "text", text, caption, ...extra }]);
+    return id;
   }
   function pushBotInstant(text: string) {
     setEntries((prev) => [...prev, { id: uid(), role: "bot", type: "text", text }]);
@@ -113,6 +139,7 @@ export default function Chatbot() {
       await completeControl(ctl);
     }
   }
+
   async function hydratePastControls(allControls: ControlWithQuestions[], currentId: string) {
     for (const c of allControls) {
       if (c.id === currentId) break;
@@ -125,20 +152,29 @@ export default function Chatbot() {
       }
       for (const q of c.followup_questions) {
         if (q.answer_id) {
+          answerControlMapRef.current[q.answer_id] = {
+            controlId: c.id,
+            controlNumber: c.control_number,
+            evidenceExpected: q.evidence_expected,
+            expectedDocuments: q.expected_documents,
+          };
           pushBotInstant(q.question_text);
           sayUser(
             q.raw_text || capitalize(q.response || ""),
-            q.raw_text && q.response ? `interpreted as: ${q.response}` : undefined
+            q.raw_text && q.response ? `interpreted as: ${q.response}` : undefined,
+            { questionId: q.id, answerId: q.answer_id ?? undefined }
           );
         }
       }
       greetedControlsRef.current.add(c.id);
     }
   }
+
   async function enterControl(ctl: ControlWithQuestions, isFirst: boolean) {
     setControl(ctl);
     setActiveQuestion(null);
     setActiveEvidence(null);
+    controlLockedRef.current = false;
     answeredIdsRef.current = new Set(
       ctl.followup_questions.filter((q) => q.answer_id).map((q) => q.id)
     );
@@ -154,10 +190,17 @@ export default function Chatbot() {
 
     for (const q of ctl.followup_questions) {
       if (q.answer_id) {
+        answerControlMapRef.current[q.answer_id] = {
+          controlId: ctl.id,
+          controlNumber: ctl.control_number,
+          evidenceExpected: q.evidence_expected,
+          expectedDocuments: q.expected_documents,
+        };
         pushBotInstant(q.question_text);
         sayUser(
           q.raw_text || capitalize(q.response || ""),
-          q.raw_text && q.response ? `interpreted as: ${q.response}` : undefined
+          q.raw_text && q.response ? `interpreted as: ${q.response}` : undefined,
+          { questionId: q.id, answerId: q.answer_id ?? undefined }
         );
       }
     }
@@ -167,6 +210,7 @@ export default function Chatbot() {
 
   async function completeControl(ctl: ControlWithQuestions) {
     setBusy(true);
+    controlLockedRef.current = true;
     await say("Thanks! Let me evaluate this control...");
     showTyping();
     try {
@@ -235,8 +279,8 @@ export default function Chatbot() {
 
         setLoadingInitial(false);
 
-        const name = localStorage.getItem("user_full_name");
-        const company = localStorage.getItem("user_company_name");
+        const name = fullName;
+        const company = companyName;
         await say(
           name
             ? `Hi ${name.split(" ")[0]} 👋 I'm your TISAX assistant.${
@@ -249,7 +293,6 @@ export default function Chatbot() {
         );
         await hydratePastControls(allControls, current.id);
         await enterControl(current, true);
-        
       } catch {
         setError("Could not load this assessment.");
         setLoadingInitial(false);
@@ -262,7 +305,7 @@ export default function Chatbot() {
 
   async function onAnswered(question: FollowupQuestion, res: AnswerResult) {
     answeredIdsRef.current.add(question.id);
-    if (question.evidence_expected) {
+    if (question.evidence_expected && res.response !== "no") {
       await say(
         `This can be verified with a document (${
           question.expected_documents.join(", ") || "policy, procedure, record..."
@@ -279,9 +322,20 @@ export default function Chatbot() {
     const q = activeQuestion;
     setBusy(true);
     setActiveQuestion(null);
-    sayUser(capitalize(value));
+    const entryId = sayUser(capitalize(value));
     try {
       const res = await api.answerQuestion(q.id, { response: value });
+      if (controlRef.current) {
+        answerControlMapRef.current[res.id] = {
+          controlId: controlRef.current.id,
+          controlNumber: controlRef.current.control_number,
+          evidenceExpected: q.evidence_expected,
+          expectedDocuments: q.expected_documents,
+        };
+      }
+      setEntries((prev) =>
+        prev.map((e) => (e.id === entryId && e.type === "text" ? { ...e, questionId: q.id, answerId: res.id } : e))
+      );
       await onAnswered(q, res);
     } catch {
       setError("Could not save your answer. Please try again.");
@@ -296,10 +350,21 @@ export default function Chatbot() {
     const q = activeQuestion;
     setBusy(true);
     setActiveQuestion(null);
-    sayUser(text);
+    const entryId = sayUser(text);
     setDraft("");
     try {
       const res = await api.answerQuestion(q.id, { raw_text: text });
+      if (controlRef.current) {
+        answerControlMapRef.current[res.id] = {
+          controlId: controlRef.current.id,
+          controlNumber: controlRef.current.control_number,
+          evidenceExpected: q.evidence_expected,
+          expectedDocuments: q.expected_documents,
+        };
+      }
+      setEntries((prev) =>
+        prev.map((e) => (e.id === entryId && e.type === "text" ? { ...e, questionId: q.id, answerId: res.id } : e))
+      );
       await say(`Got it — I'll mark this as "${res.response}".`);
       await onAnswered(q, res);
     } catch {
@@ -349,6 +414,116 @@ export default function Chatbot() {
       await advanceToNextControl();
     } finally {
       setBusy(false);
+    }
+  }
+
+  // ===== Edit a past or current answer =====
+
+  async function reassessPastControl(controlId: string, controlNumber: string) {
+    await say(`You updated your answer for control ${controlNumber}. Let me re-evaluate it...`);
+    showTyping();
+    try {
+      const result = await api.assessControl(controlId);
+      hideTyping();
+      await sayFinding({
+        maturity: result.maturity_level,
+        confidence: result.confidence,
+        mode: result.assessment_mode,
+        finding: `Updated result — ${result.finding}`,
+        recommendation: result.recommendation,
+      });
+    } catch {
+      hideTyping();
+      await say("I couldn't re-evaluate that control right now — your answer is saved, but the score wasn't updated.");
+    }
+  }
+
+  async function handleEditAnswer(entryId: string, newValue: string, isFreeText: boolean) {
+    const entry = entries.find((e) => e.id === entryId);
+    if (!entry || entry.type !== "text" || !entry.answerId) return;
+    setBusy(true);
+    try {
+      const res = await api.editAnswer(entry.answerId, isFreeText ? { raw_text: newValue } : { response: newValue });
+      const displayText = isFreeText ? newValue : capitalize(newValue);
+      setEntries((prev) =>
+        prev.map((e) =>
+          e.id === entryId && e.type === "text"
+            ? { ...e, text: displayText, caption: isFreeText ? `interpreted as: ${res.response}` : undefined }
+            : e
+        )
+      );
+      setEditingEntryId(null);
+
+      const owner = answerControlMapRef.current[entry.answerId];
+      const isPastControl = !!owner && owner.controlId !== controlRef.current?.id;
+
+      if (owner?.evidenceExpected && res.response !== "no") {
+        // Offer evidence first — reassessment (if this is a past, completed
+        // control) happens AFTER the evidence is resolved, so it isn't
+        // missed by an evaluation that ran too early.
+        setEntries((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            role: "bot",
+            type: "evidence-request",
+            answerId: entry.answerId!,
+            docs: owner.expectedDocuments,
+            status: "idle",
+            controlId: owner.controlId,
+            controlNumber: owner.controlNumber,
+          },
+        ]);
+      } else if (isPastControl) {
+        await reassessPastControl(owner!.controlId, owner!.controlNumber);
+      }
+    } catch {
+      setError("Could not update your answer. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleInlineEvidenceUpload(
+    entryId: string,
+    answerId: string,
+    controlId: string,
+    controlNumber: string,
+    file: File
+  ) {
+    setEntries((prev) =>
+      prev.map((e) => (e.id === entryId && e.type === "evidence-request" ? { ...e, status: "uploading" } : e))
+    );
+    try {
+      const uploaded = await api.uploadEvidence(answerId, file);
+      setEntries((prev) =>
+        prev.map((e) => (e.id === entryId && e.type === "evidence-request" ? { ...e, status: "analyzing" } : e))
+      );
+      const analyzed = await api.analyzeEvidence(uploaded.id);
+      const verdict = analyzed.analysis?.verdict || "reviewed";
+      setEntries((prev) => prev.filter((e) => e.id !== entryId));
+      sayUser(`📎 Uploaded: ${uploaded.filename}`);
+      await say(
+        `Document reviewed — ${verdict.replace(/_/g, " ")}.${
+          analyzed.analysis?.summary ? " " + analyzed.analysis.summary : ""
+        }`
+      );
+    } catch {
+      setEntries((prev) =>
+        prev.map((e) => (e.id === entryId && e.type === "evidence-request" ? { ...e, status: "idle" } : e))
+      );
+      return;
+    }
+    if (controlId !== controlRef.current?.id) {
+      await reassessPastControl(controlId, controlNumber);
+    }
+  }
+
+  async function handleInlineEvidenceSkip(entryId: string, controlId: string, controlNumber: string) {
+    setEntries((prev) => prev.filter((e) => e.id !== entryId));
+    sayUser("Skip, no document");
+    if (controlId !== controlRef.current?.id) {
+      await reassessPastControl(controlId, controlNumber);
     }
   }
 
@@ -433,9 +608,28 @@ export default function Chatbot() {
 
       {/* Transcript */}
       <div className="flex-1 space-y-3 overflow-y-auto py-4">
-        {entries.map((e) => (
-          <ChatBubble key={e.id} entry={e} userInitial={userInitial} userPhoto={profilePhoto} />
-        ))}
+        {entries.map((e) =>
+          e.type === "evidence-request" ? (
+            <InlineEvidenceRequest
+              key={e.id}
+              entry={e}
+              onUpload={(file) => handleInlineEvidenceUpload(e.id, e.answerId, e.controlId, e.controlNumber, file)}
+              onSkip={() => handleInlineEvidenceSkip(e.id, e.controlId, e.controlNumber)}
+            />
+          ) : (
+            <ChatBubble
+              key={e.id}
+              entry={e}
+              userInitial={userInitial}
+              userPhoto={profilePhoto}
+              editable={e.type === "text" && e.role === "user" && !!e.answerId && !controlLockedRef.current}
+              isEditing={editingEntryId === e.id}
+              onStartEdit={() => setEditingEntryId(e.id)}
+              onCancelEdit={() => setEditingEntryId(null)}
+              onSaveEdit={(value, isFreeText) => handleEditAnswer(e.id, value, isFreeText)}
+            />
+          )
+        )}
         {streaming && (
           <ChatBubble
             entry={{ id: streaming.id, role: "bot", type: "text", text: streaming.shown + "▍" }}
@@ -520,11 +714,23 @@ function ChatBubble({
   entry,
   userInitial,
   userPhoto,
+  editable,
+  isEditing,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
 }: {
   entry: Entry;
   userInitial: string;
   userPhoto?: string | null;
+  editable?: boolean;
+  isEditing?: boolean;
+  onStartEdit?: () => void;
+  onCancelEdit?: () => void;
+  onSaveEdit?: (value: string, isFreeText: boolean) => void;
 }) {
+  const [editDraft, setEditDraft] = useState("");
+
   if (entry.type === "typing") {
     return (
       <div className="flex items-end gap-2">
@@ -561,6 +767,44 @@ function ChatBubble({
   }
 
   const isBot = entry.role === "bot";
+
+  if (isEditing) {
+    return (
+      <div className="flex flex-col items-end gap-2">
+        <div className="max-w-[85%] rounded-2xl rounded-br-sm border border-brand-300 bg-white p-3 dark:border-brand-500/40 dark:bg-slate-800">
+          <div className="flex flex-wrap gap-2">
+            {QUICK_REPLIES.map((b) => (
+              <button
+                key={b.value}
+                onClick={() => onSaveEdit?.(b.value, false)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold text-white ${b.className}`}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-2">
+            <input
+              type="text"
+              value={editDraft}
+              onChange={(e) => setEditDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && editDraft.trim() && onSaveEdit?.(editDraft.trim(), true)}
+              placeholder="Type a new answer..."
+              autoFocus
+              className="flex-1 rounded-lg border border-slate-300 px-2 py-1 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            />
+            <button
+              onClick={onCancelEdit}
+              className="rounded-lg px-2 py-1 text-xs text-slate-400 hover:text-slate-600"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex items-end gap-2 ${isBot ? "" : "flex-row-reverse"}`}>
       {isBot ? <BotAvatar /> : <UserAvatar initial={userInitial} photo={userPhoto} />}
@@ -575,6 +819,50 @@ function ChatBubble({
           {entry.text}
         </div>
         {entry.caption && <p className="mt-0.5 text-xs italic text-slate-400">{entry.caption}</p>}
+        {editable && (
+          <button onClick={onStartEdit} className="mt-0.5 block text-xs text-slate-400 hover:text-brand-500">
+            Edit
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InlineEvidenceRequest({
+  entry,
+  onUpload,
+  onSkip,
+}: {
+  entry: Extract<Entry, { type: "evidence-request" }>;
+  onUpload: (file: File) => void;
+  onSkip: () => void;
+}) {
+  return (
+    <div className="flex items-end gap-2">
+      <BotAvatar />
+      <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-slate-100 px-4 py-3 text-sm dark:bg-slate-800">
+        <p className="text-slate-800 dark:text-slate-100">
+          Your updated answer could be backed by a document ({entry.docs.join(", ") || "a policy or record"}). Want to upload it?
+        </p>
+        {entry.status === "idle" && (
+          <div className="mt-2 flex items-center gap-3">
+            <label className="cursor-pointer rounded-lg border border-dashed border-slate-300 px-3 py-1.5 text-xs text-slate-600 hover:bg-white dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
+              📎 Upload document
+              <input
+                type="file"
+                className="hidden"
+                accept=".pdf,.docx,.txt,.png,.jpg,.jpeg"
+                onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])}
+              />
+            </label>
+            <button onClick={onSkip} className="text-xs text-slate-400 hover:text-slate-600">
+              Skip
+            </button>
+          </div>
+        )}
+        {entry.status === "uploading" && <p className="mt-2 text-xs text-slate-400">Uploading...</p>}
+        {entry.status === "analyzing" && <p className="mt-2 text-xs text-slate-400">Analyzing...</p>}
       </div>
     </div>
   );

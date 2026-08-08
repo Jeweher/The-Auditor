@@ -6,8 +6,9 @@ export interface User {
   full_name: string;
   company_name?: string | null;
   sector?: string | null;
-  profile_photo?: string | null;
+ profile_photo?: string | null;
   is_active: boolean;
+  role: string;
   email_verified: boolean;
   created_at: string;
 }

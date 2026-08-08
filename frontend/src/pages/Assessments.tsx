@@ -39,6 +39,8 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+type UploadStatus = "idle" | "uploading" | "done" | "error";
+
 export default function Assessments() {
   const navigate = useNavigate();
   const [assessments, setAssessments] = useState<Assessment[]>([]);
@@ -52,6 +54,14 @@ export default function Assessments() {
   const [domain, setDomain] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // Custom knowledge base upload state
+  const [useCustomKb, setUseCustomKb] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadedCollection, setUploadedCollection] = useState<string | null>(null);
+  const [uploadedInfo, setUploadedInfo] = useState<{ filename: string; chunks: number } | null>(null);
 
   async function loadAssessments() {
     setLoading(true);
@@ -69,6 +79,48 @@ export default function Assessments() {
     loadAssessments();
   }, []);
 
+  function resetUploadState() {
+    setUseCustomKb(false);
+    setUploadFile(null);
+    setUploadStatus("idle");
+    setUploadError(null);
+    setUploadedCollection(null);
+    setUploadedInfo(null);
+  }
+
+  function closeModal() {
+    setShowModal(false);
+    setCreateError(null);
+    resetUploadState();
+  }
+
+  async function handleProcessFile() {
+    if (!uploadFile) return;
+    setUploadStatus("uploading");
+    setUploadError(null);
+    try {
+      const result = await assessmentsApi.uploadQuestionnaire(uploadFile);
+      setUploadedCollection(result.collection);
+      setUploadedInfo({ filename: result.filename, chunks: result.chunks_ingested });
+      setUploadStatus("done");
+    } catch (err) {
+      setUploadStatus("error");
+      if (axios.isAxiosError(err)) {
+        setUploadError(err.response?.data?.message || err.response?.data?.detail || "Could not process this file.");
+      } else {
+        setUploadError("Something went wrong while processing the file.");
+      }
+    }
+  }
+
+  function handleDiscardUpload() {
+    setUploadFile(null);
+    setUploadStatus("idle");
+    setUploadError(null);
+    setUploadedCollection(null);
+    setUploadedInfo(null);
+  }
+
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
     setCreateError(null);
@@ -79,9 +131,11 @@ export default function Assessments() {
         assessment_level: al,
         target_maturity_level: target,
         domain: domain || null,
+        kb_collection: useCustomKb && uploadedCollection ? uploadedCollection : null,
       });
       setShowModal(false);
       setName("");
+      resetUploadState();
       navigate(`/assessments/${created.id}/chat`);
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -99,6 +153,8 @@ export default function Assessments() {
     await assessmentsApi.deleteAssessment(id);
     setAssessments((prev) => prev.filter((a) => a.id !== id));
   }
+
+  const createDisabled = creating || uploadStatus === "uploading" || (useCustomKb && uploadStatus !== "done");
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
@@ -198,7 +254,7 @@ export default function Assessments() {
       {/* Create modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 dark:bg-slate-800">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 dark:bg-slate-800">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">
               New assessment
             </h2>
@@ -208,6 +264,81 @@ export default function Assessments() {
                 {createError}
               </div>
             )}
+
+            {/* Custom knowledge base upload (optional) */}
+            <div className="mt-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={useCustomKb}
+                  onChange={(e) => {
+                    setUseCustomKb(e.target.checked);
+                    if (!e.target.checked) handleDiscardUpload();
+                  }}
+                  className="mt-0.5 h-4 w-4 accent-brand-500"
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                    Use my own VDA ISA questionnaire
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Optional. Upload a .xlsx file to base this assessment on your own control catalogue instead of the default one.
+                  </p>
+                </div>
+              </label>
+
+              {useCustomKb && (
+                <div className="mt-3 space-y-3">
+                  {uploadStatus !== "done" && (
+                    <>
+                      <input
+                        type="file"
+                        accept=".xlsx"
+                        disabled={uploadStatus === "uploading"}
+                        onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
+                        className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:text-slate-300 dark:file:bg-brand-500/10 dark:file:text-brand-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleProcessFile}
+                        disabled={!uploadFile || uploadStatus === "uploading"}
+                        className="w-full rounded-lg border border-brand-300 px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-500/40 dark:text-brand-400 dark:hover:bg-brand-500/10"
+                      >
+                        {uploadStatus === "uploading" ? "Processing your file..." : "Process this file"}
+                      </button>
+                      {uploadStatus === "uploading" && (
+                        <div>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+                            <div className="h-full w-1/3 animate-pulse rounded-full bg-brand-500" />
+                          </div>
+                          <p className="mt-1 text-xs text-slate-400">
+                            Parsing, chunking, and indexing your document — this can take up to 2 minutes. Please don't close this window.
+                          </p>
+                        </div>
+                      )}
+                      {uploadStatus === "error" && uploadError && (
+                        <p className="text-xs text-rose-500">{uploadError}</p>
+                      )}
+                    </>
+                  )}
+
+                  {uploadStatus === "done" && uploadedInfo && (
+                    <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2 text-xs dark:bg-emerald-500/10">
+                      <span className="text-emerald-700 dark:text-emerald-400">
+                        ✓ {uploadedInfo.filename} — {uploadedInfo.chunks} chunks indexed
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleDiscardUpload}
+                        className="font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             <form onSubmit={handleCreate} className="mt-4 space-y-4">
               <div>
@@ -272,19 +403,24 @@ export default function Assessments() {
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={closeModal}
                   className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={creating}
+                  disabled={createDisabled}
                   className="flex-1 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
                 >
                   {creating ? "Creating..." : "Create"}
                 </button>
               </div>
+              {useCustomKb && uploadStatus !== "done" && (
+                <p className="text-center text-xs text-slate-400">
+                  Process your file above before creating the assessment.
+                </p>
+              )}
             </form>
           </div>
         </div>

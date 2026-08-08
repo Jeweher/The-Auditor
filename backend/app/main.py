@@ -12,6 +12,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1.routers.admin import router as admin_router
 from app.api.v1.routers.assessment import router as assessment_router
 from app.api.v1.routers.auth import router as auth_router
 from app.api.v1.routers.knowledge_base import router as knowledge_base_router
@@ -45,6 +46,7 @@ app.include_router(auth_router)
 app.include_router(knowledge_base_router)
 app.include_router(assessment_router)
 app.include_router(public_router)
+app.include_router(admin_router)
 
 
 @app.get("/health", tags=["system"])

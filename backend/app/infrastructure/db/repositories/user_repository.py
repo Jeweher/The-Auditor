@@ -29,6 +29,7 @@ def _to_domain(model: UserModel) -> User:
         sector=model.sector,
         profile_photo=model.profile_photo,
         email_verified=model.email_verified,
+        role=model.role,
     )
 
 
@@ -73,6 +74,22 @@ class SqlAlchemyUserRepository(UserRepositoryPort):
     def set_email_verified(self, user_id: UUID, verified: bool) -> User:
         model = self._db.get(UserModel, user_id)
         model.email_verified = verified
+        self._db.commit()
+        self._db.refresh(model)
+        return _to_domain(model)
+    def set_role(self, user_id: UUID, role: str) -> User:
+        model = self._db.get(UserModel, user_id)
+        model.role = role
+        self._db.commit()
+        self._db.refresh(model)
+        return _to_domain(model)
+    def list_all(self) -> list[User]:
+        models = self._db.query(UserModel).order_by(UserModel.created_at.desc()).all()
+        return [_to_domain(m) for m in models]
+
+    def set_active(self, user_id: UUID, is_active: bool) -> User:
+        model = self._db.get(UserModel, user_id)
+        model.is_active = is_active
         self._db.commit()
         self._db.refresh(model)
         return _to_domain(model)

@@ -28,8 +28,8 @@ export default function Login() {
     setNeedsVerification(false);
     setLoading(true);
     try {
-      await login(email, password);
-      navigate("/assessments");
+      const role = await login(email, password);
+      navigate(role === "admin" ? "/admin/users" : "/assessments");
     } catch (err) {
       if (axios.isAxiosError(err)) {
         const message =

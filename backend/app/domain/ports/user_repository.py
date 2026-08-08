@@ -51,3 +51,13 @@ class UserRepositoryPort(ABC):
     @abstractmethod
     def revoke_refresh_token(self, user_id: UUID, hashed_token: str) -> None:
         raise NotImplementedError
+    @abstractmethod
+    def set_role(self, user_id: UUID, role: str) -> User:
+        raise NotImplementedError
+    @abstractmethod
+    def list_all(self) -> list[User]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def set_active(self, user_id: UUID, is_active: bool) -> User:
+        raise NotImplementedError
