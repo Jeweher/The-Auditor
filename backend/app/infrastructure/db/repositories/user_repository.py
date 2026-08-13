@@ -30,6 +30,9 @@ def _to_domain(model: UserModel) -> User:
         profile_photo=model.profile_photo,
         email_verified=model.email_verified,
         role=model.role,
+        job_title=model.job_title,
+        company_size=model.company_size,
+        audit_reason=model.audit_reason,
     )
 
 
@@ -53,6 +56,9 @@ class SqlAlchemyUserRepository(UserRepositoryPort):
         full_name: str,
         company_name: str | None = None,
         sector: str | None = None,
+        job_title: str | None = None,
+        company_size: str | None = None,
+        audit_reason: str | None = None,
     ) -> User:
         model = UserModel(
             email=email,
@@ -60,6 +66,9 @@ class SqlAlchemyUserRepository(UserRepositoryPort):
             full_name=full_name,
             company_name=company_name,
             sector=sector,
+            job_title=job_title,
+            company_size=company_size,
+            audit_reason=audit_reason,
         )
         self._db.add(model)
         self._db.commit()
@@ -80,6 +89,35 @@ class SqlAlchemyUserRepository(UserRepositoryPort):
     def set_role(self, user_id: UUID, role: str) -> User:
         model = self._db.get(UserModel, user_id)
         model.role = role
+        self._db.commit()
+        self._db.refresh(model)
+        return _to_domain(model)
+    def update_profile(
+        self,
+        user_id: UUID,
+        full_name: str | None = None,
+        company_name: str | None = None,
+        sector: str | None = None,
+        job_title: str | None = None,
+        company_size: str | None = None,
+        audit_reason: str | None = None,
+    ) -> User:
+        model = self._db.get(UserModel, user_id)
+        # Each field is only updated if explicitly provided (not None) —
+        # this lets the endpoint accept a partial payload (edit just one
+        # field) without accidentally blanking out the others.
+        if full_name is not None:
+            model.full_name = full_name
+        if company_name is not None:
+            model.company_name = company_name
+        if sector is not None:
+            model.sector = sector
+        if job_title is not None:
+            model.job_title = job_title
+        if company_size is not None:
+            model.company_size = company_size
+        if audit_reason is not None:
+            model.audit_reason = audit_reason
         self._db.commit()
         self._db.refresh(model)
         return _to_domain(model)

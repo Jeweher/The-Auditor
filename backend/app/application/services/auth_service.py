@@ -39,6 +39,9 @@ class AuthService:
         full_name: str,
         company_name: str | None = None,
         sector: str | None = None,
+        job_title: str | None = None,
+        company_size: str | None = None,
+        audit_reason: str | None = None,
     ) -> User:
         if self._repo.get_by_email(email) is not None:
             raise ConflictError("An account with this email already exists.")
@@ -49,6 +52,29 @@ class AuthService:
             full_name=full_name,
             company_name=company_name,
             sector=sector,
+            job_title=job_title,
+            company_size=company_size,
+            audit_reason=audit_reason,
+        )
+
+    def update_profile(
+        self,
+        user_id,
+        full_name: str | None = None,
+        company_name: str | None = None,
+        sector: str | None = None,
+        job_title: str | None = None,
+        company_size: str | None = None,
+        audit_reason: str | None = None,
+    ) -> User:
+        return self._repo.update_profile(
+            user_id,
+            full_name=full_name,
+            company_name=company_name,
+            sector=sector,
+            job_title=job_title,
+            company_size=company_size,
+            audit_reason=audit_reason,
         )
 
     def authenticate(self, email: str, password: str) -> User:

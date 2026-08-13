@@ -7,6 +7,10 @@ export interface CreateAssessmentPayload {
   target_maturity_level: number; // 3 | 4 | 5
   domain?: string | null; // IS | PP | DP
   kb_collection?: string | null;
+  evidence_mode?: string; // with_evidence | no_evidence
+  response_scale?: string; // yes_no_partial | yes_no
+  sample_percent?: number | null; // 10-90, or null for 100%
+  kb_source_filename?: string | null; // original filename if a custom questionnaire was uploaded
 }
 
 export async function listAssessments(): Promise<Assessment[]> {

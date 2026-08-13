@@ -26,6 +26,22 @@ class CreateAssessmentRequest(BaseModel):
     domain: str | None = Field(
         default=None, description="Optional: load controls from one domain only (IS, PP, DP)."
     )
+    evidence_mode: str = Field(
+        default="with_evidence",
+        description="with_evidence | no_evidence — no_evidence skips evidence prompts entirely and excludes evidence from maturity scoring.",
+    )
+    response_scale: str = Field(
+        default="yes_no_partial",
+        description="yes_no_partial | yes_no — restricts the allowed response values for the whole assessment.",
+    )
+    sample_percent: int | None = Field(
+        default=None,
+        description="10-90 in steps of 10, or omit for 100% (all controls). Controls are randomly sampled once at creation.",
+    )
+    kb_source_filename: str | None = Field(
+        default=None,
+        description="Original filename of the uploaded questionnaire, if a custom knowledge base was used. Display-only.",
+    )
 
 
 class AnswerRequest(BaseModel):
@@ -77,8 +93,11 @@ class AssessmentResponse(BaseModel):
     kb_collection: str
     assessment_level: str
     target_maturity_level: int
+    evidence_mode: str
+    response_scale: str
+    sample_percent: int | None
+    kb_source_filename: str | None
     status: str
-
     created_at: datetime
     updated_at: datetime
     total_controls: int

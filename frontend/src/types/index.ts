@@ -9,6 +9,9 @@ export interface User {
  profile_photo?: string | null;
   is_active: boolean;
   role: string;
+  job_title?: string | null;
+  company_size?: string | null;
+  audit_reason?: string | null;
   email_verified: boolean;
   created_at: string;
 }
@@ -25,6 +28,10 @@ export interface Assessment {
   kb_collection: string;
   assessment_level: string;
   target_maturity_level: number;
+  evidence_mode: string;
+  response_scale: string;
+  sample_percent: number | null;
+  kb_source_filename: string | null;
   status: string;
   created_at: string;
   updated_at: string;

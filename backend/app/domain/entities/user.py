@@ -24,3 +24,6 @@ class User:
     profile_photo: str | None = None
     email_verified: bool = False
     role: str = "user"
+    job_title: str | None = None
+    company_size: str | None = None
+    audit_reason: str | None = None

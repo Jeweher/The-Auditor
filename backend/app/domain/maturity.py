@@ -118,13 +118,13 @@ def compute_maturity_band(answers: ControlAnswers, target: int = DEFAULT_TARGET_
         return MaturityBand(0, 0, "All requirements were answered 'no'.")
 
     if answers.evidence_status == EvidenceStatus.CONTRADICTED:
-        return MaturityBand(0, 1, "Uploaded evidence contradicts the declared implementation.")
+        return MaturityBand(0, min(3, target), "Uploaded evidence contradicts the declared implementation.")
 
     if answers.any_no:
-        return MaturityBand(0, 1, "At least one requirement is not implemented.")
+        return MaturityBand(0, min(3, target), "At least one requirement is not implemented.")
 
     if not answers.all_yes:  # mixture of yes and partial
-        return MaturityBand(1, 2, "Requirements are only partially implemented.")
+        return MaturityBand(0, min(3, target), "Requirements are only partially implemented.")
 
     # From here: every answered question is "yes".
     # First establish the ML0-3 ceiling from process evidence.
@@ -152,9 +152,15 @@ def compute_maturity_band(answers: ControlAnswers, target: int = DEFAULT_TARGET_
     if answers.evidence_status == EvidenceStatus.NOT_REQUIRED:
         return MaturityBand(1, min(3, target), "All requirements declared implemented; no documentary evidence applies to this control.")
 
-    # MISSING
-    return MaturityBand(1, min(3, target), "All requirements declared implemented, but no supporting evidence was provided.")
-
+    # MISSING — evidence was expected but the user skipped it. Per team
+    # decision, this is now a hard rule (not a lenient band): declaring
+    # "yes" to everything without any supporting document earns nothing in
+    # the classic (with-evidence) mode. This is deliberately distinct from
+    # NOT_REQUIRED above, which stays unaffected — that covers controls
+    # where no evidence applies at all, or the whole assessment running in
+    # "no_evidence" mode (where this branch is never reached, since evidence
+    # is never requested in the first place).
+    return MaturityBand(0, 0, "Evidence was expected for this control but none was provided.")
 
 def compute_confidence(answers: ControlAnswers) -> Confidence:
     """How reliable is the estimate — independent of how mature the control is.
@@ -178,8 +184,10 @@ def compute_confidence(answers: ControlAnswers) -> Confidence:
         return Confidence.MEDIUM
     if answers.evidence_status == EvidenceStatus.IRRELEVANT:
         return Confidence.LOW
-    # MISSING
-    return Confidence.LOW
+    # MISSING — now a forced, deterministic ML0 (see compute_maturity_band),
+    # so there's no estimation uncertainty left to reflect: HIGH confidence,
+    # same pattern as the all_no case above.
+    return Confidence.HIGH
 
 
 def compute_assessment_mode(evidence_status: EvidenceStatus) -> AssessmentMode:

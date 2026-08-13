@@ -12,6 +12,33 @@ const SECTORS = [
   "Other",
 ];
 
+const JOB_TITLES = [
+  "CEO / Founder",
+  "CISO / Information Security Officer",
+  "Compliance Manager",
+  "Quality Manager",
+  "IT Manager / IT Director",
+  "Project Manager",
+  "Consultant",
+  "Other",
+];
+
+const COMPANY_SIZES = [
+  "1-10 employees",
+  "11-50 employees",
+  "51-200 employees",
+  "201-1000 employees",
+  "1000+ employees",
+];
+
+const AUDIT_REASONS = [
+  "An existing customer requires it",
+  "To become an approved supplier / attract new customers",
+  "Required for a specific project or tender I'm participating in",
+  "Internal decision — proactively improving our security posture",
+  "Other",
+];
+
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function Register() {
@@ -23,6 +50,9 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [sector, setSector] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
+  const [companySize, setCompanySize] = useState("");
+  const [auditReason, setAuditReason] = useState("");
 
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +99,9 @@ export default function Register() {
         full_name: fullName,
         company_name: companyName || undefined,
         sector: sector || undefined,
+        job_title: jobTitle || undefined,
+        company_size: companySize || undefined,
+        audit_reason: auditReason || undefined,
       });
       navigate("/verify-email", { state: { userId: user.id, email: user.email } });
     } catch (err) {
@@ -212,6 +245,60 @@ export default function Register() {
                 {SECTORS.map((s) => (
                   <option key={s} value={s}>
                     {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                Job title
+              </label>
+              <select
+                value={jobTitle}
+                onChange={(e) => setJobTitle(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              >
+                <option value="">Select your job title...</option>
+                {JOB_TITLES.map((j) => (
+                  <option key={j} value={j}>
+                    {j}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                Company size
+              </label>
+              <select
+                value={companySize}
+                onChange={(e) => setCompanySize(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              >
+                <option value="">Select company size...</option>
+                {COMPANY_SIZES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                Why are you starting a TISAX assessment?
+              </label>
+              <select
+                value={auditReason}
+                onChange={(e) => setAuditReason(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              >
+                <option value="">Select a reason...</option>
+                {AUDIT_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
                   </option>
                 ))}
               </select>

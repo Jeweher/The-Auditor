@@ -16,6 +16,7 @@ Purpose: Core business logic for the assessment engine. Handles: creating an
 """
 
 import logging
+import random
 from uuid import UUID
 
 from sqlalchemy import select
@@ -85,6 +86,10 @@ class AssessmentService:
         domain: str | None,
         assessment_level: str = "AL1",
         target_maturity_level: int = 3,
+        evidence_mode: str = "with_evidence",
+        response_scale: str = "yes_no_partial",
+        sample_percent: int | None = None,
+        kb_source_filename: str | None = None,
     ) -> AssessmentModel:
         if assessment_level not in VALID_ASSESSMENT_LEVELS:
             raise ValidationError(
@@ -94,10 +99,33 @@ class AssessmentService:
             raise ValidationError(
                 f"target_maturity_level must be one of {list(VALID_TARGET_LEVELS)}."
             )
+
+        valid_evidence_modes = ("with_evidence", "no_evidence")
+        if evidence_mode not in valid_evidence_modes:
+            raise ValidationError(f"evidence_mode must be one of {list(valid_evidence_modes)}.")
+
+        valid_response_scales = ("yes_no_partial", "yes_no")
+        if response_scale not in valid_response_scales:
+            raise ValidationError(f"response_scale must be one of {list(valid_response_scales)}.")
+
+        valid_sample_percents = (10, 20, 30, 40, 50, 60, 70, 80, 90)
+        if sample_percent is not None and sample_percent not in valid_sample_percents:
+            raise ValidationError(
+                f"sample_percent must be one of {list(valid_sample_percents)}, or omitted for 100%."
+            )
+
         collection = self._kb._resolve_collection(kb_collection)  # validates existence
         controls = self._kb.list_controls(collection, domain)
         if not controls:
             raise ValidationError("No controls found in the selected knowledge base.")
+
+        # Random sampling: pick WHICH controls are included, but keep them in
+        # their normal catalogue order for the interview — only the subset
+        # changes, not the sequencing.
+        if sample_percent is not None:
+            sample_size = max(1, round(len(controls) * sample_percent / 100))
+            sampled_indices = sorted(random.sample(range(len(controls)), k=sample_size))
+            controls = [controls[i] for i in sampled_indices]
 
         assessment = AssessmentModel(
             user_id=user_id,
@@ -105,6 +133,10 @@ class AssessmentService:
             kb_collection=collection,
             assessment_level=assessment_level,
             target_maturity_level=target_maturity_level,
+            evidence_mode=evidence_mode,
+            response_scale=response_scale,
+            sample_percent=sample_percent,
+            kb_source_filename=kb_source_filename,
         )
 
         self._db.add(assessment)
@@ -269,10 +301,14 @@ class AssessmentService:
             # Already started — return as-is (idempotent, supports resume)
             return control
 
+        assessment = self._db.get(AssessmentModel, control.assessment_id)
         questions = self._generate_followup_questions(control)
         requirements_text = self._control_requirements_text(control)
         for idx, q_text in enumerate(questions):
-            expected, docs = self._detect_evidence(q_text, requirements_text)
+            if assessment.evidence_mode == "no_evidence":
+                expected, docs = False, []
+            else:
+                expected, docs = self._detect_evidence(q_text, requirements_text)
             self._db.add(
                 FollowupQuestionModel(
                     assessment_control_id=control.id,
@@ -299,7 +335,11 @@ class AssessmentService:
     # ── Answering ─────────────────────────────────────────────────────
 
     def _resolve_response(
-        self, question: FollowupQuestionModel, response: str | None, raw_text: str | None
+        self,
+        question: FollowupQuestionModel,
+        response: str | None,
+        raw_text: str | None,
+        response_scale: str = "yes_no_partial",
     ) -> tuple[str, str | None]:
         """Decide the structured verdict for an answer.
 
@@ -308,9 +348,11 @@ class AssessmentService:
         consulted when the user typed free text and gave no verdict.
         Returns (response, justification).
         """
+        allowed = {"yes", "no", "skipped"} if response_scale == "yes_no" else VALID_RESPONSES
+
         if response:
-            if response not in VALID_RESPONSES:
-                raise ValidationError(f"response must be one of {sorted(VALID_RESPONSES)}.")
+            if response not in allowed:
+                raise ValidationError(f"response must be one of {sorted(allowed)}.")
             return response, None
 
         if not raw_text or not raw_text.strip():
@@ -320,7 +362,7 @@ class AssessmentService:
             raise ValidationError(
                 "Free-text answers require a configured LLM. Send an explicit response instead."
             )
-        return self._answer_classifier.classify(question.question_text, raw_text)
+        return self._answer_classifier.classify(question.question_text, raw_text, response_scale)
 
     def answer_question(
         self, question_id: UUID, user_id: UUID, response: str | None, raw_text: str | None
@@ -333,7 +375,10 @@ class AssessmentService:
         if question.answer is not None:
             raise ConflictError("This question is already answered. Use edit to change it.")
 
-        resolved, justification = self._resolve_response(question, response, raw_text)
+        assessment = self._db.get(AssessmentModel, control.assessment_id)
+        resolved, justification = self._resolve_response(
+            question, response, raw_text, assessment.response_scale
+        )
 
         answer = AnswerModel(
             followup_question_id=question.id,
@@ -368,7 +413,10 @@ class AssessmentService:
         question = self._db.get(FollowupQuestionModel, answer.followup_question_id)
         control = self._get_owned_control(question.assessment_control_id, user_id)
 
-        resolved, justification = self._resolve_response(question, response, raw_text)
+        assessment = self._db.get(AssessmentModel, control.assessment_id)
+        resolved, justification = self._resolve_response(
+            question, response, raw_text, assessment.response_scale
+        )
 
         answer.response = resolved
         answer.raw_text = raw_text
@@ -611,10 +659,17 @@ class AssessmentService:
         if not question_ids:
             raise ValidationError("Control has no questions to assess. Start it first.")
 
-        ans_stmt = select(AnswerModel.response).where(
-            AnswerModel.followup_question_id.in_(question_ids)
+        # Paired question+answer view, in question order — gives the LLM
+        # what was actually asked, not just a bag of "yes"/"no" values with
+        # no context on how much of the control's scope they cover.
+        qa_stmt = (
+            select(FollowupQuestionModel.question_text, AnswerModel.response)
+            .join(AnswerModel, AnswerModel.followup_question_id == FollowupQuestionModel.id)
+            .where(FollowupQuestionModel.assessment_control_id == control.id)
+            .order_by(FollowupQuestionModel.order_index)
         )
-        responses = [r[0] for r in self._db.execute(ans_stmt).all()]
+        qa_pairs = [(r[0], r[1]) for r in self._db.execute(qa_stmt).all()]
+        responses = [r[1] for r in qa_pairs]
         if not responses:
             raise ValidationError("Control has no answers yet.")
 
@@ -628,6 +683,7 @@ class AssessmentService:
             responses=responses,
             evidence_status=evidence_status,
             target=assessment.target_maturity_level,
+            qa_pairs=qa_pairs,
         )
 
         # Recommendation (deterministic shortcuts + LLM where useful).

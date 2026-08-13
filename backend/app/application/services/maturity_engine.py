@@ -72,7 +72,16 @@ Use EXCLUSIVELY these definitions:
 
 You will be given the control, the user's answers, any evidence findings, and a PERMITTED RANGE [min, max]. You MUST choose an integer maturity level within that range — never outside it. The range encodes rules already established from the facts; respect it.
 
-Reason like an auditor: existence of the process, whether it is documented, whether it is consistently applied, whether it is measured, whether it is continuously improved — and whether evidence substantiates each claim.
+Compute the maturity level using this exact deterministic procedure — do not deviate, do not use outside judgement to override it:
+
+1. Assign a weight to each answer: "yes" = 1, "partial" = 0.5, "no" = 0.
+2. SPECIAL CASE: if there is at least one "no" AND there is no "yes" at all among the answers (only "no" and/or "partial"), the maturity level is 0. Stop here, do not compute further.
+3. Otherwise, compute the average weight across all answered questions.
+4. Multiply that average by the target maturity level given below.
+5. Round to the nearest integer. If the result is exactly halfway between two integers (e.g. 1.5, 2.5), round to the nearest EVEN integer (1.5 -> 2, 2.5 -> 2, 0.5 -> 0, 3.5 -> 4).
+6. Clamp the result to the permitted range given below — if your computed value falls outside it, use the nearest bound instead.
+
+Do NOT show this calculation, any numbers, weights, or arithmetic in the finding. Never use the words "average", "weight", "formula", or similar. Write the finding exactly the way a professional auditor would in a real report: describe what was and wasn't demonstrated, in plain, natural prose — as if you had reasoned about it directly, not computed it.
 
 Respond with ONLY a JSON object, no prose, no code fences:
 {{
@@ -95,6 +104,7 @@ class MaturityAssessmentEngine:
         evidence_status: EvidenceStatus,
         target: int = 3,
         evidence_findings: str = "",
+        qa_pairs: list[tuple[str, str]] | None = None,
     ) -> dict:
         answers = ControlAnswers(responses=responses, evidence_status=evidence_status)
         band = compute_maturity_band(answers, target)
@@ -115,11 +125,20 @@ class MaturityAssessmentEngine:
                 "llm_used": False,
             }
 
-        # Open band -> LLM picks within [min, max].
+        # Open band -> LLM picks within [min, max]. Prefer the paired
+        # question+answer view — it lets the LLM judge how much of the
+        # control's full scope was actually covered, not just tally yeses
+        # with no idea what they were answers to.
+        if qa_pairs:
+            qa_lines = "\n".join(f"{i + 1}. {q} -> {a}" for i, (q, a) in enumerate(qa_pairs))
+            answers_block = f"QUESTIONS AND ANSWERS:\n{qa_lines}"
+        else:
+            answers_block = f"USER ANSWERS: {', '.join(responses)}"
+
         user_prompt = (
             f"CONTROL {control_number}: {control_question}\n\n"
             f"REQUIREMENTS:\n{requirements_text}\n\n"
-            f"USER ANSWERS: {', '.join(responses)}\n\n"
+            f"{answers_block}\n\n"
             f"EVIDENCE FINDINGS: {evidence_findings or 'none provided'}\n\n"
             f"TARGET MATURITY LEVEL: {target}\n"
             f"PERMITTED RANGE: [{band.min_ml}, {band.max_ml}]\n"

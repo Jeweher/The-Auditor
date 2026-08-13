@@ -23,6 +23,29 @@ const DOMAIN_OPTIONS = [
   { value: "DP", label: "Data Protection" },
 ];
 
+const EVIDENCE_MODE_OPTIONS = [
+  { value: "with_evidence", label: "Standard — with evidence (recommended)" },
+  { value: "no_evidence", label: "Declarative only — no evidence" },
+];
+
+const RESPONSE_SCALE_OPTIONS = [
+  { value: "yes_no_partial", label: "Yes / No / Partially (recommended)" },
+  { value: "yes_no", label: "Yes / No only" },
+];
+
+const SAMPLE_PERCENT_OPTIONS = [
+  { value: "", label: "All controls (100%) — full catalogue" },
+  { value: "10", label: "10% of controls" },
+  { value: "20", label: "20% of controls" },
+  { value: "30", label: "30% of controls" },
+  { value: "40", label: "40% of controls" },
+  { value: "50", label: "50% of controls" },
+  { value: "60", label: "60% of controls" },
+  { value: "70", label: "70% of controls" },
+  { value: "80", label: "80% of controls" },
+  { value: "90", label: "90% of controls" },
+];
+
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
     in_progress: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
@@ -52,6 +75,9 @@ export default function Assessments() {
   const [al, setAl] = useState("AL1");
   const [target, setTarget] = useState(3);
   const [domain, setDomain] = useState("");
+  const [evidenceMode, setEvidenceMode] = useState("with_evidence");
+  const [responseScale, setResponseScale] = useState("yes_no_partial");
+  const [samplePercent, setSamplePercent] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -88,10 +114,17 @@ export default function Assessments() {
     setUploadedInfo(null);
   }
 
+  function resetOptionsState() {
+    setEvidenceMode("with_evidence");
+    setResponseScale("yes_no_partial");
+    setSamplePercent("");
+  }
+
   function closeModal() {
     setShowModal(false);
     setCreateError(null);
     resetUploadState();
+    resetOptionsState();
   }
 
   async function handleProcessFile() {
@@ -132,10 +165,16 @@ export default function Assessments() {
         target_maturity_level: target,
         domain: domain || null,
         kb_collection: useCustomKb && uploadedCollection ? uploadedCollection : null,
+        evidence_mode: evidenceMode,
+        
+        response_scale: responseScale,
+        sample_percent: samplePercent ? Number(samplePercent) : null,
+        kb_source_filename: useCustomKb && uploadedInfo ? uploadedInfo.filename : null,
       });
       setShowModal(false);
       setName("");
       resetUploadState();
+      resetOptionsState();
       navigate(`/assessments/${created.id}/chat`);
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -207,6 +246,22 @@ export default function Assessments() {
               <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
                 <span className="rounded bg-slate-100 px-2 py-1 dark:bg-slate-700">{a.assessment_level}</span>
                 <span className="rounded bg-slate-100 px-2 py-1 dark:bg-slate-700">Target ML{a.target_maturity_level}</span>
+                {a.evidence_mode === "no_evidence" && (
+                  <span className="rounded bg-amber-100 px-2 py-1 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                    No evidence
+                  </span>
+                )}
+                {a.response_scale === "yes_no" && (
+                  <span className="rounded bg-slate-100 px-2 py-1 dark:bg-slate-700">Yes/No only</span>
+                )}
+                {a.sample_percent && (
+                  <span className="rounded bg-slate-100 px-2 py-1 dark:bg-slate-700">{a.sample_percent}% sample</span>
+                )}
+                {a.kb_source_filename && (
+                  <span className="rounded bg-brand-100 px-2 py-1 text-brand-700 dark:bg-brand-500/10 dark:text-brand-400">
+                    📄 {a.kb_source_filename}
+                  </span>
+                )}
               </div>
 
               <div className="mt-4">
@@ -282,7 +337,9 @@ export default function Assessments() {
                     Use my own VDA ISA questionnaire
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Optional. Upload a .xlsx file to base this assessment on your own control catalogue instead of the default one.
+                    By default, The Auditor uses the official VDA ISA 6.0.3 control catalogue
+                    (ISA6_EN_6.0.3). Optionally, upload a .xlsx file to base this assessment on
+                    your own control catalogue instead.
                   </p>
                 </div>
               </label>
@@ -398,6 +455,74 @@ export default function Assessments() {
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Assessment options — evidence, answer scale, sampling */}
+              <div className="space-y-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  Assessment options
+                </p>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Evidence requirement
+                  </label>
+                  <select
+                    value={evidenceMode}
+                    onChange={(e) => setEvidenceMode(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                  >
+                    {EVIDENCE_MODE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    {evidenceMode === "no_evidence"
+                      ? "You will only answer questions — no documents will be requested, and evidence is never taken into account when calculating your maturity level."
+                      : "You may be asked to upload supporting documents (policies, records, screenshots) for certain answers. Skipping requested evidence lowers your maturity score for that control."}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Answer scale
+                  </label>
+                  <select
+                    value={responseScale}
+                    onChange={(e) => setResponseScale(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                  >
+                    {RESPONSE_SCALE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    {responseScale === "yes_no"
+                      ? "Simple, binary answers — no middle ground. Best for a strict, clear-cut assessment."
+                      : "Allows nuanced answers — useful when a requirement is only partly implemented."}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Control sampling
+                  </label>
+                  <select
+                    value={samplePercent}
+                    onChange={(e) => setSamplePercent(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                  >
+                    {SAMPLE_PERCENT_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    By default, your assessment covers every control in the catalogue (~80
+                    controls). Choosing a lower percentage randomly selects that share of
+                    controls instead — for example, 20% randomly includes about 16 out of 80
+                    controls, for a quicker, representative assessment rather than a full audit.
+                  </p>
+                </div>
               </div>
 
               <div className="flex gap-3 pt-2">

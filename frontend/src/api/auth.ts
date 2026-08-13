@@ -7,8 +7,10 @@ export interface RegisterPayload {
   full_name: string;
   company_name?: string;
   sector?: string;
+  job_title?: string;
+  company_size?: string;
+  audit_reason?: string;
 }
-
 export async function register(payload: RegisterPayload): Promise<User> {
   const { data } = await api.post<User>("/api/v1/auth/register", payload);
   return data;
@@ -53,5 +55,18 @@ export async function uploadProfilePhoto(file: File): Promise<User> {
 
 export async function removeProfilePhoto(): Promise<User> {
   const { data } = await api.delete<User>("/api/v1/auth/me/photo");
+  return data;
+}
+export interface UpdateProfilePayload {
+  full_name?: string | null;
+  company_name?: string | null;
+  sector?: string | null;
+  job_title?: string | null;
+  company_size?: string | null;
+  audit_reason?: string | null;
+}
+
+export async function updateProfile(payload: UpdateProfilePayload): Promise<User> {
+  const { data } = await api.patch<User>("/api/v1/auth/me", payload);
   return data;
 }

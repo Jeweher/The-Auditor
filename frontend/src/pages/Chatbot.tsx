@@ -50,11 +50,20 @@ function sleep(ms: number) {
 
 const CHAR_DELAY_MS = 14;
 
-const QUICK_REPLIES: { value: "yes" | "no" | "partial"; label: string; className: string }[] = [
+type QuickReply = { value: "yes" | "no" | "partial"; label: string; className: string };
+
+const ALL_QUICK_REPLIES: QuickReply[] = [
   { value: "yes", label: "Yes", className: "bg-emerald-500 hover:bg-emerald-600" },
   { value: "partial", label: "Partially", className: "bg-amber-500 hover:bg-amber-600" },
   { value: "no", label: "No", className: "bg-rose-500 hover:bg-rose-600" },
 ];
+
+function getQuickReplies(responseScale: string | undefined): QuickReply[] {
+  if (responseScale === "yes_no") {
+    return ALL_QUICK_REPLIES.filter((b) => b.value !== "partial");
+  }
+  return ALL_QUICK_REPLIES;
+}
 
 export default function Chatbot() {
   const { id } = useParams<{ id: string }>();
@@ -627,6 +636,7 @@ export default function Chatbot() {
               onStartEdit={() => setEditingEntryId(e.id)}
               onCancelEdit={() => setEditingEntryId(null)}
               onSaveEdit={(value, isFreeText) => handleEditAnswer(e.id, value, isFreeText)}
+              responseScale={assessment?.response_scale}
             />
           )
         )}
@@ -644,7 +654,7 @@ export default function Chatbot() {
       <div className="shrink-0 border-t border-slate-200 py-4 dark:border-slate-800">
         {activeQuestion && (
           <div className="mb-2 flex flex-wrap gap-2">
-            {QUICK_REPLIES.map((b) => (
+            {getQuickReplies(assessment?.response_scale).map((b) => (
               <button
                 key={b.value}
                 onClick={() => handleQuickReply(b.value)}
@@ -719,6 +729,7 @@ function ChatBubble({
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
+  responseScale,
 }: {
   entry: Entry;
   userInitial: string;
@@ -728,6 +739,7 @@ function ChatBubble({
   onStartEdit?: () => void;
   onCancelEdit?: () => void;
   onSaveEdit?: (value: string, isFreeText: boolean) => void;
+  responseScale?: string;
 }) {
   const [editDraft, setEditDraft] = useState("");
 
@@ -773,7 +785,7 @@ function ChatBubble({
       <div className="flex flex-col items-end gap-2">
         <div className="max-w-[85%] rounded-2xl rounded-br-sm border border-brand-300 bg-white p-3 dark:border-brand-500/40 dark:bg-slate-800">
           <div className="flex flex-wrap gap-2">
-            {QUICK_REPLIES.map((b) => (
+            {getQuickReplies(responseScale).map((b) => (
               <button
                 key={b.value}
                 onClick={() => onSaveEdit?.(b.value, false)}

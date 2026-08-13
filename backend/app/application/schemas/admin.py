@@ -16,6 +16,9 @@ class AdminUserResponse(BaseModel):
     full_name: str
     company_name: str | None = None
     sector: str | None = None
+    job_title: str | None = None
+    company_size: str | None = None
+    audit_reason: str | None = None
     role: str
     is_active: bool
     email_verified: bool

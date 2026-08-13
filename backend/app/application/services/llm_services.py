@@ -73,6 +73,18 @@ Respond with ONLY a JSON array of strings, ordered by section as given. No prose
 Example: ["Question one?", "Question two?"]"""
 
 
+CLASSIFIER_SYSTEM_PROMPT_YES_NO = """You are a TISAX compliance assessor interpreting a free-text answer.
+
+Given an assessment question and the respondent's answer in their own words, classify it as either "yes" or "no". This assessment does not use a "partial" category — even if the answer sounds partially met, choose whichever of "yes" or "no" is the more honest characterization, and note any nuance in the justification.
+
+Classification:
+- "yes" — the requirement is met, even if imperfectly implemented. A brief, unqualified affirmative ("yes", "sure", "correct", "we do", "absolutely") counts as "yes".
+- "no" — not met, absent, the respondent says they don't do it, or the gap described is significant enough that it cannot honestly be called met.
+
+Respond with ONLY a JSON object, no prose, no code fences:
+{"response": "yes|no", "justification": "one short sentence explaining the classification, noting any nuance"}"""
+
+
 CLASSIFIER_SYSTEM_PROMPT = """You are a TISAX compliance assessor interpreting a free-text answer.
 
 Given an assessment question and the respondent's answer in their own words, classify how well the answer satisfies the question.
@@ -132,19 +144,26 @@ class AnswerClassifierService:
     def __init__(self, llm: LLMPort) -> None:
         self._llm = llm
 
-    def classify(self, question_text: str, raw_text: str) -> tuple[str, str]:
+    def classify(
+        self, question_text: str, raw_text: str, response_scale: str = "yes_no_partial"
+    ) -> tuple[str, str]:
         """Returns (response, justification)."""
+        if response_scale == "yes_no":
+            system_prompt = CLASSIFIER_SYSTEM_PROMPT_YES_NO
+            allowed = ("yes", "no")
+        else:
+            system_prompt = CLASSIFIER_SYSTEM_PROMPT
+            allowed = VALID_RESPONSES
+
         user_prompt = f"QUESTION:\n{question_text}\n\nANSWER:\n{raw_text}"
-        raw = self._llm.complete(
-            CLASSIFIER_SYSTEM_PROMPT, user_prompt, max_tokens=1000, temperature=0
-        )
+        raw = self._llm.complete(system_prompt, user_prompt, max_tokens=1000, temperature=0)
         parsed = _extract_json(raw)
 
         if not isinstance(parsed, dict):
             raise ExternalServiceError("LLM did not return a classification object.")
 
         response = str(parsed.get("response", "")).strip().lower()
-        if response not in VALID_RESPONSES:
+        if response not in allowed:
             raise ExternalServiceError(
                 f"LLM returned an invalid classification: {response!r}."
             )

@@ -18,6 +18,9 @@ class RegisterRequest(BaseModel):
     full_name: str = Field(min_length=1, max_length=255)
     company_name: str | None = Field(default=None, max_length=255)
     sector: str | None = Field(default=None, max_length=255)
+    job_title: str | None = Field(default=None, max_length=100)
+    company_size: str | None = Field(default=None, max_length=50)
+    audit_reason: str | None = Field(default=None, max_length=255)
 
 
 class LoginRequest(BaseModel):
@@ -54,6 +57,22 @@ class UserResponse(BaseModel):
     is_active: bool
     email_verified: bool
     role: str
+    job_title: str | None = None
+    company_size: str | None = None
+    audit_reason: str | None = None
+    job_title: str | None = None
+    company_size: str | None = None
+    audit_reason: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+
+class UpdateProfileRequest(BaseModel):
+    full_name: str | None = Field(default=None, min_length=1, max_length=255)
+    company_name: str | None = None
+    sector: str | None = None
+    job_title: str | None = None
+    company_size: str | None = None
+    audit_reason: str | None = None    

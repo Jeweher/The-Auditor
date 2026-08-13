@@ -44,6 +44,10 @@ def _assessment_to_response(service: AssessmentService, assessment) -> Assessmen
         kb_collection=assessment.kb_collection,
         assessment_level=assessment.assessment_level,
         target_maturity_level=assessment.target_maturity_level,
+        evidence_mode=assessment.evidence_mode,
+        response_scale=assessment.response_scale,
+        sample_percent=assessment.sample_percent,
+        kb_source_filename=assessment.kb_source_filename,
         status=assessment.status,
         
         
@@ -97,6 +101,10 @@ def create_assessment(
         domain=payload.domain,
         assessment_level=payload.assessment_level,
         target_maturity_level=payload.target_maturity_level,
+        evidence_mode=payload.evidence_mode,
+        response_scale=payload.response_scale,
+        sample_percent=payload.sample_percent,
+        kb_source_filename=payload.kb_source_filename,
     )
     return _assessment_to_response(service, assessment)
 

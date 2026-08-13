@@ -20,6 +20,7 @@ from app.application.schemas.auth import (
     RegisterRequest,
     ResendVerificationRequest,
     TokenResponse,
+    UpdateProfileRequest,
     UserResponse,
     VerifyEmailRequest,
 )
@@ -43,6 +44,9 @@ def register(
         full_name=payload.full_name,
         company_name=payload.company_name,
         sector=payload.sector,
+        job_title=payload.job_title,
+        company_size=payload.company_size,
+        audit_reason=payload.audit_reason,
     )
     verification_service.send_verification_code(user)
     return user
@@ -79,6 +83,21 @@ def logout(
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: Annotated[User, Depends(get_current_user)]) -> User:
     return current_user
+@router.patch("/me", response_model=UserResponse)
+def update_me(
+    payload: UpdateProfileRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> User:
+    return auth_service.update_profile(
+        current_user.id,
+        full_name=payload.full_name,
+        company_name=payload.company_name,
+        sector=payload.sector,
+        job_title=payload.job_title,
+        company_size=payload.company_size,
+        audit_reason=payload.audit_reason,
+    )
 
 
 @router.post("/me/photo", response_model=UserResponse)

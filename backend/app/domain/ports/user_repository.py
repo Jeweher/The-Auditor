@@ -31,6 +31,9 @@ class UserRepositoryPort(ABC):
         full_name: str,
         company_name: str | None = None,
         sector: str | None = None,
+        job_title: str | None = None,
+        company_size: str | None = None,
+        audit_reason: str | None = None,
     ) -> User:
         raise NotImplementedError
     @abstractmethod
@@ -53,6 +56,18 @@ class UserRepositoryPort(ABC):
         raise NotImplementedError
     @abstractmethod
     def set_role(self, user_id: UUID, role: str) -> User:
+        raise NotImplementedError
+    @abstractmethod
+    def update_profile(
+        self,
+        user_id: UUID,
+        full_name: str | None = None,
+        company_name: str | None = None,
+        sector: str | None = None,
+        job_title: str | None = None,
+        company_size: str | None = None,
+        audit_reason: str | None = None,
+    ) -> User:
         raise NotImplementedError
     @abstractmethod
     def list_all(self) -> list[User]:
