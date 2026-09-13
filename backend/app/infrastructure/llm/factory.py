@@ -16,10 +16,13 @@ from app.core.exceptions import ValidationError
 from app.domain.ports.llm_client import LLMPort
 from app.infrastructure.llm.anthropic_client import AnthropicLLMClient
 from app.infrastructure.llm.gemini_client import GeminiLLMClient
+from app.infrastructure.llm.ollama_client import OllamaLLMClient
 
 _PROVIDERS = {
     "anthropic": AnthropicLLMClient,
     "gemini": GeminiLLMClient,
+    "ollama": OllamaLLMClient,
+
 }
 
 
