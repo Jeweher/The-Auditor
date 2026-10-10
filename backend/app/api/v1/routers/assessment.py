@@ -11,7 +11,8 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, UploadFile, status
-
+from fastapi.responses import StreamingResponse
+import io
 from app.api.v1.deps import get_assessment_service, get_current_user
 from app.application.schemas.assessment import (
     AnswerRequest,
@@ -61,6 +62,7 @@ def _control_to_response(control) -> ControlWithQuestionsResponse:
     questions = []
     for q in sorted(control.followup_questions, key=lambda x: x.order_index):
         ans = q.answer
+        evidence_item = ans.evidence[0] if ans and ans.evidence else None
         questions.append(
             FollowupQuestionResponse(
                 id=q.id,
@@ -72,8 +74,8 @@ def _control_to_response(control) -> ControlWithQuestionsResponse:
                 raw_text=ans.raw_text if ans else None,
                 llm_justification=ans.llm_justification if ans else None,
                 answer_id=ans.id if ans else None,
-
-                
+                evidence_id=evidence_item.id if evidence_item else None,
+                evidence_filename=evidence_item.filename if evidence_item else None,
             )
         )
     return ControlWithQuestionsResponse(
@@ -309,6 +311,19 @@ def analyze_evidence(
 ) -> EvidenceResponse:
     evidence = service.analyze_evidence(evidence_id, user.id)
     return _evidence_to_response(evidence)
+
+@router.get("/evidence/{evidence_id}/download")
+def download_evidence(
+    evidence_id: UUID,
+    service: Annotated[AssessmentService, Depends(get_assessment_service)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    content, evidence = service.get_evidence_file(evidence_id, user.id)
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type=evidence.file_type,
+        headers={"Content-Disposition": f'inline; filename="{evidence.filename}"'},
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────

@@ -61,6 +61,7 @@ class AssessmentService:
         maturity_engine=None,
         recommendation_service=None,
         file_storage=None,
+        encryption_service=None,
     ) -> None:
         # query_service: KnowledgeBaseQueryService, used to load controls from the KB.
         # LLM/storage collaborators are optional: when absent the service falls
@@ -75,6 +76,7 @@ class AssessmentService:
         self._maturity_engine = maturity_engine
         self._recommendation = recommendation_service
         self._storage = file_storage
+        self._encryption = encryption_service
 
     # ── Creation ──────────────────────────────────────────────────────
 
@@ -519,7 +521,14 @@ class AssessmentService:
 
         sha = hashlib.sha256(content).hexdigest()
         key = f"assessment_{control.assessment_id}/control_{control.control_number}/{sha[:12]}_{filename}"
-        self._storage.save(key, content)
+
+        stored_content = content
+        stored_extracted = extracted
+        if self._encryption is not None:
+            stored_content = self._encryption.encrypt_bytes(content)
+            stored_extracted = self._encryption.encrypt(extracted) if extracted else extracted
+
+        self._storage.save(key, stored_content)
 
         evidence = EvidenceModel(
             answer_id=answer.id,
@@ -528,7 +537,7 @@ class AssessmentService:
             file_type=file_type,
             size=len(content),
             sha256=sha,
-            extracted_text=extracted,
+            extracted_text=stored_extracted,
         )
         self._db.add(evidence)
         self._db.add(
@@ -562,11 +571,15 @@ class AssessmentService:
         if answer.raw_text:
             declared += f" ({answer.raw_text})"
 
+        evidence_text = evidence.extracted_text or ""
+        if self._encryption is not None and evidence_text:
+            evidence_text = self._encryption.decrypt(evidence_text)
+
         result = self._evidence_analyzer.analyze(
             control_question=control.title,
             requirements_text=requirements_text,
             declared_answers=declared,
-            evidence_text=evidence.extracted_text or "",
+            evidence_text=evidence_text,
             target_maturity=assessment.target_maturity_level,
         )
 
@@ -587,6 +600,33 @@ class AssessmentService:
         self._db.commit()
         self._db.refresh(evidence)
         return evidence
+
+    def get_evidence_file(self, evidence_id: UUID, user_id: UUID) -> tuple[bytes, EvidenceModel]:
+        """Return the raw file content for a previously uploaded evidence,
+        after verifying the requesting user owns the assessment it belongs to."""
+        evidence = self._db.get(EvidenceModel, evidence_id)
+        if evidence is None:
+            raise NotFoundError("Evidence not found.")
+        answer = self._get_owned_answer(evidence.answer_id, user_id)  # raises if not owned
+
+        content = self._storage.load(evidence.storage_key)
+        if self._encryption is not None:
+            content = self._encryption.decrypt_bytes(content)
+
+        # Audit log: who accessed this evidence, and when.
+        question = self._db.get(FollowupQuestionModel, answer.followup_question_id)
+        control = self._db.get(AssessmentControlModel, question.assessment_control_id)
+        self._db.add(
+            ConversationMessageModel(
+                assessment_id=control.assessment_id,
+                role="system",
+                content=f"[Evidence downloaded: {evidence.filename}]",
+                related_answer_id=answer.id,
+            )
+        )
+        self._db.commit()
+
+        return content, evidence
     
 
 

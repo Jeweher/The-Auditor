@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     EMAIL_VERIFICATION_EXPIRE_MINUTES: int = Field(default=15)
     EMAIL_VERIFICATION_MAX_ATTEMPTS: int = Field(default=5)
 
+        # --- Security ---
+    ENCRYPTION_KEY: str = Field(default="")
+
 
 @lru_cache
 def get_settings() -> Settings:

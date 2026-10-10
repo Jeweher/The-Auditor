@@ -8,7 +8,7 @@ Purpose: Reusable FastAPI dependencies for the v1 API - wiring the DB
          not created per request, since the embedding model is expensive
          to load).
 """
-
+from app.infrastructure.security.encryption_service import EncryptionService
 from functools import lru_cache
 from typing import Annotated
 
@@ -128,7 +128,13 @@ def get_llm_client() -> LLMPort:
 @lru_cache
 def _file_storage_singleton() -> FileStoragePort:
     return build_file_storage()
+@lru_cache
+def _encryption_service_singleton() -> EncryptionService:
+    return EncryptionService()
 
+
+def get_encryption_service() -> EncryptionService:
+    return _encryption_service_singleton()
 
 def get_file_storage() -> FileStoragePort:
     return _file_storage_singleton()
@@ -140,6 +146,7 @@ def get_assessment_service(
     vector_store: Annotated[VectorStorePort, Depends(get_vector_store)],
     llm: Annotated[LLMPort, Depends(get_llm_client)],
     file_storage: Annotated[FileStoragePort, Depends(get_file_storage)],
+    encryption_service: Annotated[EncryptionService, Depends(get_encryption_service)],
 ) -> AssessmentService:
     context_builder = ControlContextBuilder(vector_store)
     return AssessmentService(
@@ -153,4 +160,5 @@ def get_assessment_service(
         maturity_engine=MaturityAssessmentEngine(llm),
         recommendation_service=RecommendationService(llm),
         file_storage=file_storage,
+        encryption_service=encryption_service,
     )

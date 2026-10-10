@@ -4,11 +4,13 @@ import { useAuth } from "../context/AuthContext";
 import * as api from "../api/assessments";
 import type { Assessment, ControlWithQuestions, FollowupQuestion } from "../types";
 import type { AnswerResult } from "../api/assessments";
+import { downloadEvidence } from "../api/assessments";
 
 // ===== Chat transcript model =====
 
 type Entry =
-  | { id: string; role: "bot" | "user"; type: "text"; text: string; caption?: string; questionId?: string; answerId?: string }
+  
+  | { id: string; role: "bot" | "user"; type: "text"; text: string; caption?: string; questionId?: string; answerId?: string; evidenceId?: string }
   | { id: string; role: "bot"; type: "typing" }
   | {
       id: string;
@@ -112,10 +114,10 @@ export default function Chatbot() {
     setStreaming(null);
   }
 
- function sayUser(
+  function sayUser(
     text: string,
     caption?: string,
-    extra?: { questionId?: string; answerId?: string }
+    extra?: { questionId?: string; answerId?: string; evidenceId?: string }
   ): string {
     const id = uid();
     setEntries((prev) => [...prev, { id, role: "user", type: "text", text, caption, ...extra }]);
@@ -173,6 +175,9 @@ export default function Chatbot() {
             q.raw_text && q.response ? `interpreted as: ${q.response}` : undefined,
             { questionId: q.id, answerId: q.answer_id ?? undefined }
           );
+          if (q.evidence_id && q.evidence_filename) {
+            sayUser(`📎 ${q.evidence_filename}`, undefined, { evidenceId: q.evidence_id });
+          }
         }
       }
       greetedControlsRef.current.add(c.id);
@@ -390,7 +395,7 @@ export default function Chatbot() {
     setEvidenceUi("uploading");
     try {
       const uploaded = await api.uploadEvidence(ev.answerId, file);
-      sayUser(`📎 Uploaded: ${uploaded.filename}`);
+            sayUser(`📎 ${uploaded.filename}`, undefined, { evidenceId: uploaded.id })
       setEvidenceUi("analyzing");
       const analyzed = await api.analyzeEvidence(uploaded.id);
       const verdict = analyzed.analysis?.verdict || "reviewed";
@@ -511,7 +516,7 @@ export default function Chatbot() {
       const analyzed = await api.analyzeEvidence(uploaded.id);
       const verdict = analyzed.analysis?.verdict || "reviewed";
       setEntries((prev) => prev.filter((e) => e.id !== entryId));
-      sayUser(`📎 Uploaded: ${uploaded.filename}`);
+            sayUser(`📎 ${uploaded.filename}`, undefined, { evidenceId: uploaded.id });
       await say(
         `Document reviewed — ${verdict.replace(/_/g, " ")}.${
           analyzed.analysis?.summary ? " " + analyzed.analysis.summary : ""
@@ -828,7 +833,19 @@ function ChatBubble({
               : "rounded-br-sm bg-brand-500 text-white"
           }`}
         >
-          {entry.text}
+                    {entry.type === "text" && entry.evidenceId ? (
+            <button
+              onClick={async () => {
+                const blob = await downloadEvidence(entry.evidenceId!);
+                window.open(URL.createObjectURL(blob), "_blank");
+              }}
+              className="underline decoration-dotted hover:opacity-80"
+            >
+              {entry.text}
+            </button>
+          ) : (
+            entry.text
+          )}
         </div>
         {entry.caption && <p className="mt-0.5 text-xs italic text-slate-400">{entry.caption}</p>}
         {editable && (

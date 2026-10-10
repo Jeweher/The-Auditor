@@ -71,6 +71,8 @@ class FollowupQuestionResponse(BaseModel):
     raw_text: str | None = None
     llm_justification: str | None = None
     answer_id: UUID | None = None
+    evidence_id: UUID | None = None
+    evidence_filename: str | None = None
 
 
 class ControlResponse(BaseModel):

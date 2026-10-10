@@ -122,6 +122,12 @@ export async function analyzeEvidence(evidenceId: string): Promise<Evidence> {
   );
   return data;
 }
+export async function downloadEvidence(evidenceId: string): Promise<Blob> {
+  const { data } = await api.get(`/api/v1/assessments/evidence/${evidenceId}/download`, {
+    responseType: "blob",
+  });
+  return data;
+}
 
 export async function listControls(assessmentId: string): Promise<ControlWithQuestions[]> {
   const { data } = await api.get<ControlWithQuestions[]>(`/api/v1/assessments/${assessmentId}/controls`);

@@ -51,6 +51,8 @@ export interface FollowupQuestion {
   raw_text: string | null;
   llm_justification: string | null;
   answer_id: string | null;
+  evidence_id: string | null;
+  evidence_filename: string | null;
 }
 
 export interface ControlWithQuestions {
