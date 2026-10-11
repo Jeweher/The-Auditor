@@ -6,6 +6,7 @@ Purpose: Unauthenticated endpoints reachable without an account — currently
          in-memory per-IP rate limit (see core/rate_limit.py).
 """
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -16,6 +17,8 @@ from app.application.services.knowledge_base_query_service import KnowledgeBaseQ
 from app.application.services.public_assistant_service import PublicAssistantService
 from app.core.rate_limit import public_assistant_rate_limiter
 from app.domain.ports.llm_client import LLMPort
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/public", tags=["public"])
 
@@ -38,5 +41,14 @@ def ask_tisax_assistant(
 ) -> AskAssistantResponse:
     service = PublicAssistantService(kb_query_service, llm)
     history = [h.model_dump() for h in payload.history]
-    reply = service.answer(payload.message, history)
+    try:
+        reply = service.answer(payload.message, history)
+    except Exception:
+        # Log the real cause, but return a clean HTTP error so the browser
+        # receives proper CORS headers instead of a misleading CORS failure.
+        logger.exception("TISAX assistant failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The assistant is temporarily unavailable. Please try again.",
+        )
     return AskAssistantResponse(reply=reply)
