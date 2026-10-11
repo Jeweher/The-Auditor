@@ -7,6 +7,13 @@ Purpose: FastAPI application factory. Wires together config, logging,
          health checks.
 """
 
+import os
+
+# Must be set BEFORE any import that may load transformers / sentence-transformers,
+# so the app never tries to reach huggingface.co (works without internet).
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
 import logging
 
 from fastapi import FastAPI
